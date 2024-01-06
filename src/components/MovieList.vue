@@ -1,7 +1,6 @@
 <template>
     <div class="movie-list">
-      <div class="movie-card" v-for="movie in movies" :key="movie.id">
-        <router-link :to="'/movie/' + movie.id" class="movie-link">
+      <div class="movie-card" @click="() => openMovie(movie)" v-for="movie in movies" :key="movie.id">
           <img v-if="movie.poster" :src="movie.poster" :alt="movie.name + ' poster'" />
           <img v-if="!movie.poster" src="/src/assets/poster-not-available.png"/>
           <div class="movie-detail">
@@ -13,19 +12,23 @@
             <p v-if="movie.description !== ''">{{ movie.description }}</p>
             <p v-else>Click to see more details</p>
           </div>
-        </router-link>
       </div>
     </div>
 </template>
 
 
 <script setup lang="ts">
+import router from '@/router';
+import type { Movie } from '@openmoviedb/kinopoiskdev_client';
 import { IconStar } from '@tabler/icons-vue';
 
 defineProps<{
   movies: any[]
 }>()
 
+function openMovie(movie: Movie) {
+  router.push('/movie/' + movie.id)
+}
 
 </script>
 
@@ -46,8 +49,7 @@ defineProps<{
       display: none;
     }
     .movie-card {
-      // flex: 1 1 33.33%;
-      // flex-basis: 250px;
+      cursor: pointer;
       position: relative;
       width: 300px;
       background-color: transparent;

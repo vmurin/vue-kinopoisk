@@ -1,0 +1,125 @@
+org: vmurin
+app: movie-search-aws
+service: movie-search-aws
+frameworkVersion: "3"
+
+custom:
+  siteName: movies.valinor.me
+  aliasHostedZoneId: Z01803522XEA1B6TFWQEA
+  aliasDNSName: s3.eu-central-1.amazonaws.com # s3-website.eu-central-1.amazonaws.com
+  cloudFrontDistributionID: E3J5T8LWYQ4BUT
+  SSLCertificateID: 94f5ae3d-f3f4-442b-8395-2f6e23ec249f
+  s3Sync:
+    - bucketName: ${self:custom.siteName}
+      localDir: dist  
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: eu-central-1
+
+plugins:
+  - serverless-s3-sync
+
+resources:
+  Resources:
+    StaticSite:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.siteName}
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: false
+        OwnershipControls:
+          Rules:
+            - ObjectOwnership: ObjectWriter
+
+    StaticSiteS3BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: StaticSite
+        PolicyDocument:
+          Statement:
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: 
+                Service: "cloudfront.amazonaws.com"
+              Action:
+              - s3:GetObject
+              Resource:
+                Fn::Join: [
+                  "", [
+                    "arn:aws:s3:::",
+                    {
+                      "Ref": "StaticSite"
+                    },
+                    "/*"
+                  ]
+                ]
+              Condition:
+                StringEquals:
+                  AWS:SourceArn: arn:aws:cloudfront::${aws:accountId}:distribution/${self:custom.cloudFrontDistributionID}
+
+    # WebsiteDomainName:
+    #   Type: AWS::Route53::RecordSetGroup
+    #   Properties:
+    #     HostedZoneId: ${self:custom.aliasHostedZoneId}
+    #     #HostedZoneName: ${self:custom.siteName}.
+    #     RecordSets:
+    #     - Name: ${self:custom.siteName}
+    #       Type: A
+    #       AliasTarget:
+    #         HostedZoneId: "Z21DNDUVLTQW6Q"  # Europe (Frankfurt)
+    #         DNSName: { Fn::GetAtt: [ myCloudDistribution, DomainName ] }
+    
+    myCloudDistribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Enabled: "true"
+          DefaultRootObject: "index.html"
+          # The default caching applies to the default (root) objects, not to images etc...
+          DefaultCacheBehavior:
+            Compress: 'true'
+            AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+            # MinTTL: "0"
+            # MaxTTL: "0"
+            # DefaultTTL: "0"
+            TargetOriginId: myS3Origin
+            ForwardedValues:
+              QueryString: 'true'
+              Cookies:
+                Forward: all
+            ViewerProtocolPolicy: redirect-to-https
+          Origins:
+            - DomainName: ${self:custom.siteName}.${self:custom.aliasDNSName}
+              ## An identifier for the origin which must be unique within the distribution
+              Id: myS3Origin
+              OriginAccessControlId: { Fn::GetAtt: [ S3OriginAccessControl, Id ] }
+              S3OriginConfig: {}
+          PriceClass: PriceClass_All
+          CustomErrorResponses:
+            - ErrorCode: 404
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+            - ErrorCode: 403
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+          Aliases: 
+            - ${self:custom.siteName}
+          ViewerCertificate:
+            AcmCertificateArn: arn:aws:acm:us-east-1:${aws:accountId}:certificate/${self:custom.SSLCertificateID}
+            MinimumProtocolVersion: TLSv1
+            SslSupportMethod: sni-only
+
+    S3OriginAccessControl:
+      Type: AWS::CloudFront::OriginAccessControl
+      Properties:
+        OriginAccessControlConfig:
+          Name: "${self:app}-origin-access-control"
+          OriginAccessControlOriginType: s3
+          SigningBehavior: always
+          SigningProtocol: sigv4              

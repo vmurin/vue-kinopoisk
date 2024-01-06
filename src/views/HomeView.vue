@@ -4,52 +4,56 @@ import LocalDB from '@/assets/LocalDB';
 import MovieList from '@/components/MovieList.vue';
 import { IconSearch } from '@tabler/icons-vue';
 
-const apiKey = import.meta.env.VITE_API_KEY
-const searchText = ref("")
-const movies: Ref<MeiliMovieEntity[]> = ref([]);
-const localDB = new LocalDB();
 
 import {
   KinopoiskDev,
   MovieQueryBuilder,
   type MeiliMovieEntity
 } from '@openmoviedb/kinopoiskdev_client';
+import { useUrlSearchParams } from '@vueuse/core'
+
+const searchText = ref("")
+const movies: Ref<MeiliMovieEntity[]> = ref([]);
+const localDB = new LocalDB();
+const params = useUrlSearchParams('history')
 
 const kp = new KinopoiskDev(`${import.meta.env.VITE_KINOPOISK_API_KEY}`);
 
 onMounted(() => {
-  const lastMovies = localDB.get('lastResults');
-  if (lastMovies) {
-    try {
-      movies.value = JSON.parse(lastMovies);
-    } catch (e) {
-      console.error(`Error parsing: ${lastMovies}`);
-    }
+  if (params.query) {
+    searchText.value = params.query as string;
+    searchKino()
   }
 });
 
 async function searchKino() {
+  params.query = searchText.value;
+  if (searchText.value == localDB.get('lastSearch')) {
+    const lastMovies = localDB.get('lastResults');
+    try {
+      movies.value = JSON.parse(lastMovies);
+      return;
+    } catch (error) {
+      console.log(error);
+    }
+  }
   localDB.set('search', searchText.value)
-  console.log(`=> ${localDB.get('search')}`);
   const queryBuilder = new MovieQueryBuilder();
   // Создаем запрос для поиска фильмов по подходящих под наш запрос
   const query = queryBuilder
     // Указываем что хотим получить фильм под названием Аватар вышедший в 2022
     .query(localDB.get('search'))
     .select( ['id', 'name', 'rating', 'poster', 'year', 'movieLength', 'description', 'shortDescription'])
-    // Добавляем пагинацию и получаем 1 страницу по с 10 фильмами на странице
     .paginate(1, 9)
-    // Собираем запрос
     .build();
 
   const { data, error, message } = await kp.movie.getBySearchQuery(query);
 
   if (data) {
     const { docs, page, limit } = data;
-    console.log(`Страница ${page} из ${limit}`);
-    console.log(docs)
     movies.value = docs.filter(mov => mov.poster != null)
     localDB.set('lastResults', JSON.stringify(movies.value));
+    localDB.set('lastSearch', searchText.value);
   }
 
   // Если будет ошибка, то выведем ее в консоль
@@ -79,7 +83,7 @@ async function searchKino() {
 
 <style lang="scss">
 .home {
-  // LOGO 
+  // LOGO
   .logo {
     display: flex;
     align-items: center;
@@ -99,7 +103,8 @@ async function searchKino() {
       height: 4em;
     }
   }
-  // SEARCH BAR 
+
+  // SEARCH BAR
   .search-bar {
     position: relative;
     left: 30%;
@@ -111,7 +116,7 @@ async function searchKino() {
     align-items: center;
     border-radius: 60px;
     padding: 10px 20px;
-    
+
     input {
       background: transparent;
       flex: 1;
@@ -122,9 +127,10 @@ async function searchKino() {
       font-size: 23px;
       color: var(--search-bar-text);
       &::placeholder {
-        color: var(--search-bar-placeholder)
+        color: var(--search-bar-placeholder);
       }
     }
+
     button {
       border: none;
       outline: none;
@@ -134,11 +140,37 @@ async function searchKino() {
       width: 60px;
       height: 60px;
       cursor: pointer;
-    
+
       .search-icon {
         font-size: 25px;
         color: var(--search-bar-placeholder);
       }
+    }
+  }
+
+  @media (max-width: 768px) {
+    .logo {
+      left: 0;
+      margin: 0 auto;
+      h2 {
+        font-size: 40px;
+      }
+    }
+
+    .search-bar {
+      left: 3%;
+      width: 92%;
+
+      input {
+        width: 80%;
+        font-size: 18px;
+      }
+    }
+  }
+
+  @media (max-width: 480px) {
+    .movie-list {
+      grid-template-columns: 1fr;
     }
   }
 }

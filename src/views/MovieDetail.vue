@@ -3,25 +3,52 @@
         <a @click="$router.go(-1)">
             <IconArrowBackUp :size="48" color="white" class="back-button"/>
         </a>
-        <img v-if="movie.backdrop?.url"  :src="movie.backdrop.url" :alt="movie.name + ' poster'" class="movie-backdrop"/>
+        <img v-if="movie?.backdrop?.url"  :src="movie.backdrop.url" :alt="movie.name + ' poster'" class="movie-backdrop"/>
         <div class="movie-poster">
-            <img v-if="movie.poster?.url" :src="movie.poster.url" :alt="movie.name + ' poster'" />
-            <img v-if="!movie.poster?.url" src="/src/assets/poster-not-available.png"/>
+            <img v-if="movie?.poster?.url" :src="movie.poster.url" :alt="movie.name + ' poster'" />
+            <img v-if="!movie?.poster?.url" src="/src/assets/poster-not-available.png"/>
         </div>
         <div class="movie-detail">
             <div class="movie-text">
                 <h2>{{ movie.name }}</h2>
                 <h4>{{ movie.slogan }}</h4>
-                <div v-for="genre in genres" class="movie-genres">
-                    <span v-if="genres.indexOf(genre) !== genres.length - 1" class="genre-name"><i>{{ genre.name }}, </i></span>
-                    <span v-else class="genre-name"><i>{{ genre.name }}</i></span>
+                <div class="alternative-names">
+                    <span class="name"><strong>Original:</strong> <i>{{ movie.alternativeName }}</i></span><br />
+                    <span class="name"><strong>German:</strong> <i>{{ movie.names.filter((n) => n.language == 'DE')[0]?.name }}</i></span>
+                </div>
+                <div class="production">
+                    <strong>Production: </strong>
+                    <template v-for="(country, index) in movie.countries" :key="index">
+                        <span class="name"><i>{{ country.name }}</i></span>
+                        <span v-if="index !== productionCountriesLength - 1"><i>, </i></span>
+                    </template>                    
+                </div>
+                <div class="movie-genres">
+                    <template v-for="(genre, index) in genres" :key="genre.id">
+                        <span class="genre-name"><i>{{ genre.name }}</i></span>
+                        <span v-if="index !== genres.length - 1"><i>, </i></span>
+                    </template>
                 </div>
                 <div class="movie-datetime">
                     <span><IconClock :size="24"/>{{ movie.movieLength }} mins</span>
                     <span><IconCalendarStats :size="24" />{{ year }}</span>
-                    <span><IconStar :size="24" />{{ rating.kp }}</span>
+                    <span title="Kinopoisk rating"><IconStar :size="24" />{{ rating?.kp }}</span>
+                    <span title="IMDB rating"><IconMovie :size="24" />{{ rating?.imdb }}</span>
                 </div>
-                
+                <div class="movie-persons">
+                    Режисёр:
+                    <template v-for="(director, index) in directors" :key="director.id">
+                        <span class="person-name"><i>{{ director.name }}</i></span>
+                        <span v-if="index !== directors?.length || 0 - 1"><i>, </i></span>
+                    </template>
+                </div>
+                <div class="movie-persons">
+                    Актёры:
+                    <template v-for="(actor, index) in actors?.slice(0, 5)" :key="actor.id">
+                        <span class="person-name"><i>{{ actor.name }} ({{ actor.description }})</i></span>
+                        <span v-if="index !== 4"><i>, </i></span> <!-- output for 5 actors only (0-4) -->
+                    </template>
+                </div>
                 <p>{{ movie.description }}</p>
             </div>
         </div>
@@ -32,26 +59,43 @@
     </div>
 </template>
 <script setup lang="ts">
-import { ref, onBeforeMount } from 'vue';
+import { ref, onBeforeMount, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import '@/assets/base.css';
-import { IconStar, IconClock, IconArrowBackUp, IconCalendarStats } from '@tabler/icons-vue';
-
-const apiKey = import.meta.env.VITE_API_KEY
-
-const movie = ref({});
-const route = useRoute();
-const genres = ref([]);
-const year = ref("");
-const rating = ref("")
-
+import { IconStar, IconClock, IconArrowBackUp, IconCalendarStats, IconMovie } from '@tabler/icons-vue';
 import {
-  KinopoiskDev,
-  MovieQueryBuilder,
-  SPECIAL_VALUE,
-  SORT_TYPE,
-  type MeiliMovieEntity
+  KinopoiskDev, type MovieDtoV1, type Rating, type PersonInMovie, type Images
 } from '@openmoviedb/kinopoiskdev_client';
+
+interface Genre {
+    id:number
+    name: string
+}
+
+function createEmptyMovieDtoV1(): MovieDtoV1 {
+  return {
+    id: 0,
+    names: [],
+    type: '',
+    externalId: {},
+    typeNumber: 0,
+    facts: [],
+    imagesInfo: {} as Images,
+    productionCompanies: []
+  };
+}
+
+const movie = ref<MovieDtoV1>(createEmptyMovieDtoV1());
+const route = useRoute();
+const genres = ref<Genre[]>([]);
+const year = ref(0);
+const rating = ref<Rating | undefined>({})
+const directors = ref<PersonInMovie[] | undefined>([])
+const actors = ref<PersonInMovie[] | undefined>([])
+
+const productionCountriesLength = computed(() => {
+  return movie.value.countries ? movie.value.countries.length : 0;
+})
 
 const kp = new KinopoiskDev(`${import.meta.env.VITE_KINOPOISK_API_KEY}`);
 
@@ -62,12 +106,15 @@ onBeforeMount(async () => {
             console.log("Single movie data:")
             console.log(data);
             movie.value = data  // returns a Movie object
-            genres.value = movie.value.genres;
-            year.value = movie.value.year;
+            genres.value = movie.value.genres as { id: number; name: string; }[];
+            year.value = movie.value.year || 1900;
             rating.value = movie.value.rating;    
+
+            const persons = movie.value.persons;
+            directors.value = persons?.filter(person => person.enProfession == 'director' && person.id)
+            actors.value = persons?.filter(person => person.enProfession == 'actor' && person.id)
         }
 
-        // Если будет ошибка, то выведем ее в консоль
         if (error) console.log(error, message);
     } catch (error) {
         console.error(error);
@@ -77,115 +124,4 @@ onBeforeMount(async () => {
 
 </script>
 
-
-<style lang="scss">
-
-    .back-button {
-        color: black;
-        font-size: 40px;
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        cursor: pointer;
-    }
-
-    .back-button:hover {
-        color: white;
-    }
-
-    .movie-banner {
-        position: relative;
-        width: 100%;
-        min-height: 91vh;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background: linear-gradient(to right, rgba(181, 180, 180, 0.2), 30%, rgba(0, 0, 0, 0.7));
-
-        .movie-backdrop {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: -1;
-        }
-
-        .movie-detail {
-            display: flex;
-            justify-content: flex-start;
-            width: 80%;
-
-            .movie-text {
-                color: white;
-                margin-left: 40px;
-                height: 100%;
-                position: relative;
-                bottom: 60px;
-
-                h2 {
-                    font-size: 60px;
-                    font-weight: 600;
-                    margin-bottom: 7px;
-                    max-width: 60%;
-                    line-height: 100%;
-                }
-
-                h4 {
-                    font-size: 20px;
-                    font-weight: 500;
-                    margin-bottom: 15px;
-                    letter-spacing: 2px;
-                }
-
-                .movie-genres {
-                    display: inline;
-
-                    .genre-name {
-                        font-size: 17px;
-                        font-weight: 300;
-                    }
-                }
-
-                .movie-datetime {
-                    margin-top: 5px;
-                    margin-bottom: 15px;
-                    font-size: 16px;
-                    font-weight: 300;
-                    display: flex;
-                    column-gap: 15px;
-
-                    span {
-                        .icon {
-                            margin-right: 4px;
-                            font-size: 14px;
-                            position: relative;
-                            top: 2px;
-                        }
-                    }
-                }
-
-                p {
-                    max-width: 50%;
-                    font-weight: 200;
-                    font-size: 16px;
-                    letter-spacing: 1px;
-                }
-            }
-        }
-
-        .movie-poster {
-            position: relative;
-            width: 400px;
-            height: auto;
-            margin-left: 120px;
-
-            img {
-                width: 100%;
-                border-radius: 20px;
-            }
-        }
-    }
-
-</style>
+<style lang="scss" src="./MovieDetail.scss" />

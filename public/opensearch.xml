@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/" xmlns:moz="http://www.mozilla.org/2006/browser/search/">
+  <ShortName>Movie Search</ShortName>
+  <Description>Search for movies on Kinopoisk</Description>
+  <InputEncoding>UTF-8</InputEncoding>
+  <Image height="32" width="32" type="image/png">/moviesearch.png</Image>
+  <Url type="text/html" method="get" template="https://movies.valinor.me?query={searchTerms}"/>
+  <moz:SearchForm>https://movies.valinor.me</moz:SearchForm>
+</OpenSearchDescription>
