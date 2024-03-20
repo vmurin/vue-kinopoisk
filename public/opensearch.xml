@@ -4,6 +4,7 @@
   <Description>Search for movies on Kinopoisk</Description>
   <InputEncoding>UTF-8</InputEncoding>
   <Image height="32" width="32" type="image/png">/moviesearch.png</Image>
+  <Url type="application/opensearchdescription+xml" rel="self" template="https://movies.valinor.me/opensearch.xml?"/>
   <Url type="text/html" method="get" template="https://movies.valinor.me?query={searchTerms}"/>
   <moz:SearchForm>https://movies.valinor.me</moz:SearchForm>
 </OpenSearchDescription>
